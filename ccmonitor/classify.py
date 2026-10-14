@@ -11,6 +11,10 @@ from .notice import Level, Notice
 from .options import options_label, parse_options
 
 COMMAND_CHARS = 1000
+# Desktop's tool for starting another session. Its card ("New session" / "Do it here", or
+# a proposal to start) is drawn by the app and fires no PermissionRequest, so ccmonitor
+# hooks its PreToolUse instead (install.MATCHERS).
+START_SESSION = "mcp__ccd_session__start_session"
 PROMPT_LABEL_CHARS = 30
 # Prompts the app injects rather than the user types: CI events, task notifications,
 # messages from other sessions, system reminders (seen live in a notice label).
@@ -98,6 +102,8 @@ class Classifier:
             self._prompts.pop(sid, None)
         elif event == "PermissionRequest":
             return self._permission(sid, p)
+        elif event == "PreToolUse" and p.get("tool_name") == START_SESSION:
+            return self._session_card(sid, p)
         elif event == "StopFailure":
             detail = p.get("error_details") or p.get("last_assistant_message") or ""
             text = f"回合因 API 错误中断：{p.get('error') or 'unknown'}" + (f"（{_clip(detail, 200)}）" if detail else "")
@@ -124,6 +130,22 @@ class Classifier:
         detail = _clip(command or json.dumps(tool_input, ensure_ascii=False), COMMAND_CHARS)
         return self._notice(Level.URGENT, "approval", sid, p, f"{tool}: {detail}",
                             command=command, tool=tool, detail=detail, key=key)
+
+    def _session_card(self, sid: str, p: dict) -> Notice | None:
+        """A start_session call that puts a card in front of the user: an "offer" waits for
+        "New session" / "Do it here" and blocks the turn; an "own_initiative" proposal sits
+        until started. user_asked starts at once, proposal_id starts one already accepted."""
+        tool_input = p.get("tool_input") or {}
+        initiation = tool_input.get("initiation")
+        title = str(tool_input.get("title") or "")
+        if tool_input.get("proposal_id") or initiation not in ("offer", "own_initiative"):
+            return None
+        if initiation == "offer":
+            return self._notice(Level.URGENT, "offer", sid, p,
+                                f"Desktop 弹出卡片等你选：新开会话还是在这里做\n「{title}」\n回合停在这里，到电脑上点卡片")
+        brief = _clip(" ".join(str(tool_input.get("prompt") or "").split()), 300)
+        return self._notice(Level.DEFERRED, "proposal", sid, p,
+                            f"Claude 提议新开一个会话「{title}」，到电脑上点卡片启动" + (f"\n\n{brief}" if brief else ""))
 
     def _notice(self, level: Level, kind: str, sid: str, p: dict, text: str, **kw) -> Notice:
         title, prompt = self.who(sid, p)

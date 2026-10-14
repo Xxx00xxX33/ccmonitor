@@ -11,7 +11,7 @@ class Level(Enum):
 @dataclass
 class Notice:
     level: Level
-    kind: str           # "approval" | "question" | "completed"
+    kind: str           # "approval" | "question" | "offer" | "completed" | "proposal" | "stuck" | "error"
     session_id: str
     session_label: str  # 会话标题 · 用户最后一句的前 30 字
     text: str

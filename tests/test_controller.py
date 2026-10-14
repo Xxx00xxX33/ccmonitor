@@ -190,6 +190,23 @@ class ControllerTest(unittest.TestCase):
                 (self.data_dir / "settings.json").write_text(broken, encoding="utf-8")
                 self.assertEqual(self.controller().away_minutes, 3)
 
+    # -- 换班间隔 (mode B) --------------------------------------------------------------
+    def test_rotate_interval_defaults_to_2_hours_and_survives_a_restart(self):
+        self.assertEqual(self.c.rotate_hours, 2)
+        self.assertEqual(self.c.set_rotate_hours(" 5 "), 5)
+        self.c.set_away_minutes("4")  # saving the other setting keeps this one
+        self.assertEqual(self.controller().rotate_hours, 5)
+
+    def test_out_of_range_or_non_integer_rotate_interval_is_refused_with_a_reason(self):
+        self.c.set_rotate_hours("3")
+        for bad in ("0", "25", "-1", "1.5", "abc", ""):
+            with self.subTest(bad=bad), self.assertRaises(ValueError) as caught:
+                self.c.set_rotate_hours(bad)
+            self.assertIn("24", str(caught.exception))
+        self.assertEqual(self.c.rotate_hours, 3)
+        (self.data_dir / "settings.json").write_text('{"rotate_hours": 99}', encoding="utf-8")
+        self.assertEqual(self.controller().rotate_hours, 2)
+
     # -- 启用/停用 across restarts (#69) -----------------------------------------------
     def test_first_start_enables(self):
         self.assertEqual(self.c.restore().state, "运行中")

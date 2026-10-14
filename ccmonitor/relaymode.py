@@ -2,7 +2,7 @@
 
   A  no agent (default): the daemon holds them and sends them itself (pending.py).
   B  agent: a resident helper session forwards them with Desktop's session-to-session
-     messaging (helper.py), and is cleared and re-primed every 6 hours (rotation.py).
+     messaging (helper.py), and is cleared and re-primed every 2 hours (rotation.py).
      While no helper is connected, B falls back to A.
 
 The mode lives in relay-mode.json in the storage directory (paths.DATA_DIR, by default
@@ -60,7 +60,7 @@ SETUP_PROMPT = f"""你是 ccmonitor 的转发会话。你只做一件事：把 c
 5. Monitor 结束、过期或报错时，立刻用同样参数重新启动。转发源报「daemon not reachable」时，等 5 分钟再启动。
 6. 除此之外什么都不做。每次处理完只回复一行「已转发 #编号」。"""
 
-DESCRIBE = {"a": "A（不借助 agent，守护进程自己排队重发）", "b": "B（借助转发会话，每 6 小时换班）"}
+DESCRIBE = {"a": "A（不借助 agent，守护进程自己排队重发）", "b": "B（借助转发会话，定时换班）"}
 
 
 def load_mode(path: Path | None = None) -> str:

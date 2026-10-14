@@ -7,7 +7,7 @@ hooks/relay_ack.py. The helper cannot approve permission requests.
 
 The feed listens on 127.0.0.1 only. Requests live in memory until acknowledged.
 
-Used only in relay mode B (relaymode.py). The helper is rotated every 6 hours
+Used only in relay mode B (relaymode.py). The helper is rotated every 2 hours
 (rotation.py): paused, cleared with /clear and re-primed with SETUP_PROMPT through UI
 write-back. /clear gives it a new CLI session id, so while it is paused for rotation it
 is recognised by its Desktop title instead.

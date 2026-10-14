@@ -5,6 +5,7 @@ import socket
 import tempfile
 import threading
 import unittest
+from unittest import mock
 from pathlib import Path
 
 from ccmonitor.daemon import Daemon
@@ -12,7 +13,8 @@ from ccmonitor.desktop import DesktopWriteBack
 from ccmonitor.helper import HelperRelay
 from ccmonitor.relaymode import (PYTHON, SETUP_PROMPT, RelayMode, helper_brief, load_mode, new_session_link,
                                  prepare_helper_dir, save_mode)
-from ccmonitor.rotation import EVERY_SECONDS, RECONNECT_SECONDS, RETRY_SECONDS, HelperRotation
+from ccmonitor import paths, settings
+from ccmonitor.rotation import EVERY_SECONDS, RECONNECT_SECONDS, RETRY_SECONDS, HelperRotation, every_seconds
 
 
 class ModeStoreTest(unittest.TestCase):
@@ -122,7 +124,8 @@ class RotationTest(unittest.TestCase):
         self.writes, self.codes, self.reports = [], [], []
         self.rot = HelperRotation(self.helper, self.write, lambda sid: "ccmonitor 转发" if sid == "h1" else None,
                                   lambda: self.away, lambda: self.mode, self.reports.append, now=lambda: self.clock,
-                                  sleep=lambda s: None)
+                                  every=lambda: self.every, sleep=lambda s: None)
+        self.every = EVERY_SECONDS
 
     def write(self, title, text):
         self.writes.append((title, text))
@@ -135,10 +138,25 @@ class RotationTest(unittest.TestCase):
         self.assertEqual(self.helper.paused_title, "ccmonitor 转发")  # no forwards until it reconnects
         self.assertEqual(self.reports, [])
 
-    def test_not_before_six_hours(self):
+    def test_not_before_the_interval(self):
         self.clock = EVERY_SECONDS - 1
         self.rot.check()
         self.assertEqual(self.writes, [])
+
+    def test_a_changed_interval_applies_at_the_next_check(self):
+        self.every = 5 * 3600
+        self.rot.check()
+        self.assertEqual(self.writes, [])
+        self.every = 1 * 3600
+        self.rot.check()
+        self.assertEqual(len(self.writes), 2)
+
+    def test_the_interval_is_read_from_settings_json_each_time(self):
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(paths, "DATA_DIR", Path(d)):
+            self.assertEqual(every_seconds({}), 2 * 3600)
+            settings.save(Path(d), rotate_hours=3)
+            self.assertEqual(every_seconds({}), 3 * 3600)
+            self.assertEqual(every_seconds({"CCMONITOR_ROTATE_SECONDS": "90"}), 90)
 
     def test_only_in_mode_b(self):
         self.mode = "a"

@@ -13,7 +13,7 @@ import time
 from pathlib import Path
 from typing import Callable
 
-from .classify import Classifier
+from .classify import START_SESSION, Classifier
 from .notice import Level, Notice
 
 QUIET_SECONDS = 600
@@ -90,7 +90,9 @@ class StuckWatcher:
             self._turns[sid] = _Turn({k: p.get(k) for k in ("session_id", "cwd", "transcript_path")}, self._clock())
         elif event in ("Stop", "StopFailure", "SessionEnd"):
             self._turns.pop(sid, None)
-        elif event == "PermissionRequest" and sid in self._turns:
+        elif sid in self._turns and (event == "PermissionRequest" or (
+                event == "PreToolUse" and p.get("tool_name") == START_SESSION
+                and (p.get("tool_input") or {}).get("initiation") == "offer")):
             self._turns[sid].awaiting_since = self._clock()
 
     def check(self) -> list[Notice]:

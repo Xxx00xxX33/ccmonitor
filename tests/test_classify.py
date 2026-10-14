@@ -68,6 +68,28 @@ class ClassifierTest(unittest.TestCase):
         self.assertEqual([q["multi"] for q in n.questions], [False, True])
         self.assertEqual(n.questions[1]["options"][1], {"label": "商场", "description": ""})
 
+    def test_a_start_session_offer_is_urgent(self):
+        # The offer's "New session" / "Do it here" card is Desktop's own: no PermissionRequest.
+        n = self.c.handle(payload("PreToolUse", tool_name="mcp__ccd_session__start_session",
+                                  tool_input={"initiation": "offer", "title": "Split the relay"}))
+        self.assertEqual((n.level, n.kind), (Level.URGENT, "offer"))
+        self.assertIn("「Split the relay」", n.text)
+
+    def test_a_proposed_session_is_deferred_with_its_brief(self):
+        n = self.c.handle(payload("PreToolUse", tool_name="mcp__ccd_session__start_session",
+                                  tool_input={"initiation": "own_initiative", "title": "Fix X",
+                                              "prompt": "In the repo,\n fix X."}))
+        self.assertEqual((n.level, n.kind), (Level.DEFERRED, "proposal"))
+        self.assertIn("「Fix X」", n.text)
+        self.assertIn("In the repo, fix X.", n.text)
+
+    def test_session_starts_without_a_card_produce_no_notice(self):
+        for tool_input in ({"initiation": "user_asked", "title": "T", "prompt": "p"}, {"proposal_id": "task_1"},
+                           {"initiation": "offer", "proposal_id": "task_1"}):
+            self.assertIsNone(self.c.handle(payload("PreToolUse", tool_name="mcp__ccd_session__start_session",
+                                                    tool_input=tool_input)))
+        self.assertIsNone(self.c.handle(payload("PreToolUse", tool_name="Bash", tool_input={"command": "ls"})))
+
     def test_stop_is_deferred_completion_with_options(self):
         n = self.c.handle(payload("Stop", last_assistant_message="完成了。\n\n选项：\n1. 按刚才说的继续\n2. 写测试"))
         self.assertEqual(n.level, Level.DEFERRED)

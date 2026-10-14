@@ -8,7 +8,10 @@ import sys
 from pathlib import Path
 
 EVENTS = ["SessionStart", "UserPromptSubmit", "PermissionRequest", "Stop", "StopFailure", "SessionEnd",
-          "PostToolUse", "PostToolUseFailure"]
+          "PostToolUse", "PostToolUseFailure", "PreToolUse"]
+# PreToolUse only for Desktop's start_session, whose "New session" card is the app's own
+# and fires no PermissionRequest (classify.START_SESSION); every other call skips the relay.
+MATCHERS = {"PreToolUse": "mcp__ccd_session__start_session"}
 # Fired on every tool call, only to take settled approval buttons off (sidechannel), so
 # they run in the background: Claude Code doesn't wait for them (~0.4 s per relay start).
 ASYNC_EVENTS = {"PostToolUse", "PostToolUseFailure"}
@@ -52,7 +55,8 @@ def install(path: Path, command: str, dry_run: bool = False) -> dict:
         hook = {"type": "command", "command": command, "timeout": 5}
         if event in ASYNC_EVENTS:
             hook["async"] = True
-        hooks.setdefault(event, []).append({"hooks": [hook]})
+        group = {"matcher": MATCHERS[event]} if event in MATCHERS else {}
+        hooks.setdefault(event, []).append({**group, "hooks": [hook]})
     if not dry_run:
         _save(path, settings)
     return settings

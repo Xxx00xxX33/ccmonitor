@@ -27,7 +27,8 @@ class InstallTest(unittest.TestCase):
             hook = {"type": "command", "command": CMD, "timeout": 5}
             if e in ("PostToolUse", "PostToolUseFailure"):
                 hook["async"] = True  # every tool call fires these; Claude Code must not wait
-            self.assertEqual(hooks[e], [{"hooks": [hook]}])
+            group = {"matcher": "mcp__ccd_session__start_session"} if e == "PreToolUse" else {}
+            self.assertEqual(hooks[e], [{**group, "hooks": [hook]}])
 
     def test_keeps_existing_settings_and_hooks(self):
         other = {"matcher": "Bash", "hooks": [{"type": "command", "command": "guard.sh"}]}

@@ -166,6 +166,14 @@ class StuckWatcherTest(unittest.TestCase):
         self.now = T0 + 9999
         self.assertEqual(self.w.check(), [])
 
+    def test_waiting_on_a_session_offer_card_is_not_stuck(self):
+        self.ev("UserPromptSubmit")
+        self.now = T0 + 10
+        self.ev("PreToolUse", tool_name="mcp__ccd_session__start_session",
+                tool_input={"initiation": "offer", "title": "T"})
+        self.now = T0 + 9999
+        self.assertEqual(self.w.check(), [])
+
     def test_activity_after_approval_resumes_watching(self):
         self.ev("UserPromptSubmit")
         self.now = T0 + 10

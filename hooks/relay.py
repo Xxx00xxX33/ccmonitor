@@ -19,7 +19,7 @@ import time
 
 MAX_BYTES = 4 * 1024 * 1024
 REPLY_SECONDS = 1.5
-RETRY_EVENTS = {"Stop", "StopFailure", "PermissionRequest"}  # the ones that become notices
+RETRY_EVENTS = {"Stop", "StopFailure", "PermissionRequest", "PreToolUse"}  # the ones that become notices
 RETRY_SECONDS = 3.5  # all attempts together; hooks are registered with a 5 s timeout
 RETRY_EVERY = 0.25
 DOWN_SECONDS = 30

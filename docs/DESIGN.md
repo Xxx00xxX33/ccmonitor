@@ -97,6 +97,7 @@
 
 - 主：官方 hook 事件，在模型之外运行，不进上下文。会话用 `session_id` 识别。
   - 立刻级：只用 `PermissionRequest`。`tool_name` 为 `AskUserQuestion` 时是 Claude 提问，其余是权限审批，`tool_input` 带命令全文。不依赖 `Notification(permission_prompt)` 和 `idle_prompt`。
+  - 例外：Desktop 的 `mcp__ccd_session__start_session` 弹出的「New session / Do it here」卡片是 Desktop 自己画的，不触发 `PermissionRequest`（2026-10-14 用户发现 Telegram 没提示）。所以给这一个工具注册带 matcher 的 `PreToolUse`：`initiation` 为 `offer` 时回合停住等卡片，发立刻级「等你选择」；为 `own_initiative` 时卡片挂着不挡回合，发延后级「提议新会话」并附简介前 300 字；`user_asked` 和带 `proposal_id` 的直接启动，不发。暂无 Telegram 按钮，只提示到电脑上点；等卡片期间不算卡住。
   - 延后级：`Stop`，`last_assistant_message` 直接提供回答全文和选项段。
   - 写入「拒绝」后不会有 `Stop`，侧通道自己把这次审批标为结束。
 - 兜底：会话记录文件（`transcript_path`），只在 `Stop` 缺失时用。
@@ -204,7 +205,7 @@
   - 模式 B：借助转发会话（最便宜的模型、effort low、Bypass permissions）；转发会话没连上或正在换班时按模式 A 排队。
   - 转发会话由用户手动新建（2026-10-14 改，原来由任一会话用 `start_session` 代建）：那个工具不是每个 Claude Desktop 版本都有，ccmonitor 要能给别人用。窗口的「新建转发会话」用官方深链接 `claude://code/new` 在存储目录的 `helper` 文件夹里打开一个填好启动指令的新会话，模型和 effort 由该文件夹的项目设置定（Haiku、low）；用户第一次信任文件夹、选 Bypass，再按发送（深链接有意只填不发，ccmonitor 不代按）。「复制启动指令」留作打不开链接时的后备；启动指令里的 Python 用运行 ccmonitor 的那个（不靠 PATH 上的 `python`），缺必需工具时转发会话自己说明并停下。
   - 切换：守护进程启动参数 `--relay-mode a|b`、Telegram `/mode a|b`、或会话里运行 `python -m ccmonitor.relaymode a|b|status`；选择存进 `%USERPROFILE%\.ccmonitor\relay-mode.json`。切到 B 而没有转发会话时，命令打印新建参数，由运行它的会话新建。
-  - 模式 B 每 6 小时换班：转发会话不能在自动触发的回合里新建会话；自己清空会停掉转发源且没人唤醒（2026-10-12 实测）；删除会话每次都要用户在电脑上确认。所以由守护进程在离开状态下用界面写入 `/clear` 再写入启动指令（实测 `/clear` 后模型、effort、权限模式保留）。换班和转发同一个工作线程排队，正在进行的转发先完成。细节见 [helper-session.md](helper-session.md)。
+  - 模式 B 定时换班（默认 2 小时，2026-10-14 由 6 小时改短；设置页「换班间隔」可改 1–24 小时）：转发会话不能在自动触发的回合里新建会话；自己清空会停掉转发源且没人唤醒（2026-10-12 实测）；删除会话每次都要用户在电脑上确认。所以由守护进程在离开状态下用界面写入 `/clear` 再写入启动指令（实测 `/clear` 后模型、effort、权限模式保留）。换班和转发同一个工作线程排队，正在进行的转发先完成。细节见 [helper-session.md](helper-session.md)。
 
 ## 6. 实施前验证
 

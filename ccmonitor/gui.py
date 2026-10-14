@@ -26,7 +26,7 @@ from typing import Callable
 from . import autostart, icons, instance, package, paths
 from .controller import DISABLED, ERROR, RUNNING, UNCONFIGURED, Controller, Snapshot, TelegramResult
 from .daemon import DEFAULT_PORT, Service, setup_logging
-from .settings import AWAY_MAX, AWAY_MIN
+from .settings import AWAY_MAX, AWAY_MIN, ROTATE_MAX, ROTATE_MIN
 from .tray import Tray
 
 WIDTH = 360
@@ -197,6 +197,18 @@ class Window:
         ttk.Label(row, text="分钟无键鼠输入即算离开").pack(side="left", padx=(4, 0))
         self.away_error = ttk.Label(page, foreground=RED, wraplength=WIDTH - 48)
         self.away_error.pack(fill="x", pady=(6, 0))
+        row = ttk.Frame(page)
+        row.pack(fill="x", pady=(6, 0))
+        ttk.Label(row, text="换班间隔：").pack(side="left")
+        self.rotate = tk.StringVar(value=str(self.c.rotate_hours))
+        box = ttk.Spinbox(row, from_=ROTATE_MIN, to=ROTATE_MAX, increment=1, width=5,
+                          textvariable=self.rotate, command=self.on_rotate)
+        box.pack(side="left")
+        box.bind("<Return>", lambda e: self.on_rotate())
+        box.bind("<FocusOut>", lambda e: self.on_rotate())
+        ttk.Label(row, text="小时换一次转发会话（模式 B）").pack(side="left", padx=(4, 0))
+        self.rotate_error = ttk.Label(page, foreground=RED, wraplength=WIDTH - 48)
+        self.rotate_error.pack(fill="x", pady=(6, 0))
         self._build_storage_row(page)
 
         # 开机自启 (#71): checked only when the Run value is this exe; 指向旧位置 unchecked
@@ -303,6 +315,15 @@ class Window:
             return
         self.away.set(str(minutes))
         self.away_error.config(text="")
+
+    def on_rotate(self) -> None:
+        try:
+            hours = self.c.set_rotate_hours(self.rotate.get())
+        except ValueError as e:
+            self.rotate_error.config(text=str(e))
+            return
+        self.rotate.set(str(hours))
+        self.rotate_error.config(text="")
 
     # -- drawing ------------------------------------------------------------------
     def draw(self, snap: Snapshot) -> None:

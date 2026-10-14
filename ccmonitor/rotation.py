@@ -1,4 +1,5 @@
-"""Rotate the mode-B helper session every 6 hours (DESIGN.md 5).
+"""Rotate the mode-B helper session every 2 hours by default (DESIGN.md 5); the 设置
+tab's 换班间隔 changes it, read at every check so it applies without a restart.
 
 A session that clears itself loses its Monitor and nobody wakes it (seen live
 2026-10-12), so the daemon does the rotation through UI write-back: pause the helper,
@@ -15,12 +16,20 @@ import os
 import time
 from typing import Callable
 
+from . import paths, settings
 from .relaymode import SETUP_PROMPT
 
 log = logging.getLogger("ccmonitor")
 
-# CCMONITOR_ROTATE_SECONDS shortens the interval for live tests only.
-EVERY_SECONDS = float(os.environ.get("CCMONITOR_ROTATE_SECONDS") or 6 * 3600)
+EVERY_SECONDS = settings.ROTATE_DEFAULT * 3600
+
+
+def every_seconds(env=os.environ) -> float:
+    """The interval: CCMONITOR_ROTATE_SECONDS (shortens it for live tests only), else
+    rotate_hours in settings.json."""
+    if env.get("CCMONITOR_ROTATE_SECONDS"):
+        return float(env["CCMONITOR_ROTATE_SECONDS"])
+    return settings.rotate_hours(settings.load(paths.DATA_DIR)) * 3600
 RETRY_SECONDS = 30 * 60       # after a failed /clear
 RECONNECT_SECONDS = 3 * 60    # the re-primed helper should be back by then
 # Right after /clear, Desktop shows the session as running for a few seconds and the
@@ -33,7 +42,7 @@ class HelperRotation:
     def __init__(self, helper, write: Callable[[str, str], tuple[str, str | None]],
                  title_of: Callable[[str], str | None], is_away: Callable[[], bool],
                  mode: Callable[[], str], report: Callable[[str], None],
-                 now: Callable[[], float] = time.monotonic, every: float = EVERY_SECONDS,
+                 now: Callable[[], float] = time.monotonic, every: Callable[[], float] = every_seconds,
                  sleep: Callable[[float], None] = time.sleep):
         self._helper = helper
         self._write = write          # UI write by Desktop title: (status, driver code)
@@ -50,7 +59,7 @@ class HelperRotation:
     def due(self) -> bool:
         h = self._helper
         return (self._mode() == "b" and h.connected and h.since is not None
-                and self._now() - h.since >= self._every)
+                and self._now() - h.since >= self._every())
 
     def check(self) -> None:
         """Called every minute on the worker."""
@@ -72,7 +81,7 @@ class HelperRotation:
         h = self._helper
         title = self._title_of(h.session_id or "")
         if not title:
-            h.since = self._now() - self._every + RETRY_SECONDS
+            h.since = self._now() - self._every() + RETRY_SECONDS
             self._report("转发会话换班失败：找不到它在 Desktop 里的标题，30 分钟后再试")
             return
         h.pause(title)
@@ -81,7 +90,7 @@ class HelperRotation:
         if code != "sent":
             h.resume()
             if code != "busy":  # mid-turn (e.g. re-arming its feed): try again next minute
-                h.since = self._now() - self._every + RETRY_SECONDS
+                h.since = self._now() - self._every() + RETRY_SECONDS
                 self._report(f"转发会话换班失败（{status}），30 分钟后再试")
             return
         for _ in range(PRIME_TRIES):

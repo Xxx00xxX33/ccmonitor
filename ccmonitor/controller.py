@@ -219,7 +219,9 @@ class Controller:
         self._lock = threading.RLock()
         # The away state, kept here and handed to every daemon start, so a new 离开时间
         # reaches the running daemon at once (#69).
-        self.away_minutes = settings.away_minutes(settings.load(self.data_dir))
+        stored = settings.load(self.data_dir)
+        self.away_minutes = settings.away_minutes(stored)
+        self.rotate_hours = settings.rotate_hours(stored)  # the daemon reads settings.json itself
         if last_input is None:
             self.presence = Presence(idle_seconds=self.away_minutes * 60)
         else:
@@ -439,6 +441,15 @@ class Controller:
         self.presence.set_idle_seconds(minutes * 60)
         self._save(away_minutes=minutes)
         return minutes
+
+    def set_rotate_hours(self, value) -> int:
+        """The 换班间隔 field (mode B): remembered in settings.json, which the running
+        daemon reads at its next minute check. ValueError, with the message to show, for
+        anything but whole hours from 1 to 24."""
+        hours = settings.parse_rotate_hours(value)
+        self.rotate_hours = hours
+        self._save(rotate_hours=hours)
+        return hours
 
     # -- 开机自启 (#71) ------------------------------------------------------------------
     def _autostart(self) -> autostart.Autostart:

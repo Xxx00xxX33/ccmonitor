@@ -24,7 +24,8 @@ from .writeback import WriteBack
 log = logging.getLogger("ccmonitor")
 
 HEADERS = {"approval": ("🔴", "需要审批"), "question": ("🔴", "Claude 提问"), "completed": ("✅", "完成"),
-           "stuck": ("⏳", "可能卡住"), "error": ("❌", "出错")}
+           "stuck": ("⏳", "可能卡住"), "error": ("❌", "出错"), "offer": ("🔴", "等你选择"),
+           "proposal": ("💬", "提议新会话")}
 COMMANDS = "/away 声明离开  /back 回到电脑前  /pause 暂停通知  /resume 恢复通知  /status 状态  /mode a|b 转发模式"
 # An /away button under the input box (a reply keyboard: tapping it sends the command),
 # shown only while not away (user's call, 2026-10-12); every command is in the "/" menu.
