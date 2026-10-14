@@ -1,0 +1,7 @@
+.remember/
+.claude/settings.local.json
+__pycache__/
+.claude/worktrees/
+bin/ccmonitor.exe
+bin/ccmonitor.ini
+bin/ccmonitor.ini.tmp
