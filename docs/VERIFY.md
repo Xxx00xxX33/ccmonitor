@@ -715,3 +715,34 @@ Group  class="epitaxy-approval-card …"      ← 和审批卡片同一个类名
 
 - 没收到这一轮的 ✅ 完成通知，日志里 11:04:24 之后也没有 `presence message: away`。多半是之后电脑上有了真实输入，声明按设计失效、回到在电脑前，所以不转发。日志不记这次输入，没法事后确认。
 - 日志按天轮换（#79）还没实际发生：存储目录里目前只有 `daemon.log`（约 28 KB），也没有旧的 `.1`/`.2` 要清。第一次轮换在 10-15 零点。
+
+## 「新建转发会话」实测，归档后转发源不断开（2026-10-14 13:12 – 14:52，PR #85）
+
+13:12 合并 #85，主目录测试通过，`ccmonitor.exe --replace` 重启，日志 `listening on 127.0.0.1:47821`、`relay mode b`。13:12:58 `helper session connected`：12:44 手动建的旧转发会话（Desktop 的默认工作文件夹）重新连上。
+
+| 检查 | 结果 |
+|---|---|
+| 归档旧转发会话 | 从别的会话调用归档被拒（「still has live work」：Monitor 后台任务和 Remote Control 还在），用户在侧边栏手动归档 |
+| 归档后 | 日志没有 `helper session disconnected`；`relay_feed.py` 进程（16676，父链 bash → Claude Code）仍在，ccmonitor 仍当作已连接。13:17 手动结束这个进程树后，13:17:29 `helper session disconnected` |
+| 状态页 | 「转发会话：未连接」，出现提示和「新建转发会话」「复制启动指令」两个按钮 |
+| 点「新建转发会话」 | Desktop 打开新会话：文件夹 `%USERPROFILE%\.ccmonitor\helper`、Haiku 5.5、Low，完整启动指令已填好，路径指向主目录；弹出「Trust this workspace?」，权限显示 Auto |
+| 按钮旁的提示 | 被窗口宽度截断，只看到「已在 Claude Desktop 打开」 |
+| 用户信任文件夹、选 Bypass、按发送 | 13:19:41 `helper session connected`；新会话标题被它自己改为「ccmonitor 转发」，`get_session`：`claude-haiku-5-5`、effort `low`、cwd `%USERPROFILE%\.ccmonitor\helper` |
+| 之后 | 13:49、14:19、14:49 各一次断开、几秒后重连：Monitor 30 分钟到期，转发会话按启动指令第 5 条重启转发源 |
+
+- 只验证了连上，还没有真正经它转发过一条消息（要等界面写入发不出去时才走这条路）。
+- 两个问题在下一个 PR 修：归档后守护进程每分钟查 Desktop 会话记录，转发会话已归档就主动断开转发源；按钮旁的提示改为单独一行、自动换行。修复只有单元测试（含真实的 `relay_feed.py` 进程在断开后自己退出），没有在真机上再归档一次验证；换行没有目视确认。
+- 测试时的教训：用 `CCMONITOR_HOME` 起的冒烟实例仍会从 `%APPDATA%` 的旧位置读到真正的 Telegram 配置（`paths.config_file` 的兼容回退），14:54 起了约 30 秒就和正式实例抢 `getUpdates`（409 Conflict），正式实例随后恢复并发了一条"Telegram 曾不可用"。#89 已修：设了 `CCMONITOR_HOME` 就不再回退读旧配置，409 也改报为"另一个程序在用同一个 bot 接收消息"。
+
+## #87 部署（2026-10-14 15:02 – 15:05）
+
+15:02 合并 #87（`f9d9923`），主目录测试全部通过，`ccmonitor.exe --replace` 重启。
+
+| 检查 | 结果 |
+|---|---|
+| 日志 | 15:03:39 `listening on 127.0.0.1:47821`、`relay mode b`、`telegram side channel on` |
+| 转发会话 | 15:03:35 旧守护进程退出时 `helper session disconnected`，15:03:53 `helper session connected`：`helper` 文件夹里的转发会话自己重启转发源连回 |
+| 归档检查 | 重连后一分多钟没有 `helper session archived; dropping its feed`：每分钟的检查没把在线的转发会话当成已归档 |
+
+- 还没在真机上验证：归档转发会话后一分钟内自动断开（要等下次真的归档）；按钮下那行提示的换行（只在没有转发会话时显示，现在看不到）。
+

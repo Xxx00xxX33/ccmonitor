@@ -139,8 +139,8 @@ class Window:
         hint_row.pack(fill="x", pady=(4, 0))
         ttk.Button(hint_row, text="新建转发会话", command=self.on_new_helper).pack(side="left")
         ttk.Button(hint_row, text="复制启动指令", command=self.on_copy_prompt).pack(side="left", padx=(8, 0))
-        self.copied = ttk.Label(hint_row, foreground=MUTED)
-        self.copied.pack(side="left", padx=(8, 0))
+        self.copied = ttk.Label(self.helper_hint, foreground=MUTED, wraplength=WIDTH - 48)  # a sentence: wraps
+        self.copied.pack(fill="x", pady=(4, 0))
 
         self.log_row = ttk.Frame(page)
         self.log_row.pack(fill="x", pady=(12, 0))

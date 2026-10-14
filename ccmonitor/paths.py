@@ -178,9 +178,13 @@ def migrate(data_dir: Path | None = None) -> list[str]:
 def config_file(data_dir: Path | None = None, env: Mapping[str, str] = os.environ) -> Path:
     """The Telegram config: DATA_DIR/config.json, else where older versions read it
     (%APPDATA% taken from `env`). Not copied, so the token is not duplicated. Saving always
-    writes DATA_DIR/config.json, which then wins."""
+    writes DATA_DIR/config.json, which then wins.
+
+    A CCMONITOR_HOME in `env` gets no fallback: it is a throwaway instance's own storage.
+    Found 2026-10-14: one on a temp folder read the real token from %APPDATA% and polled
+    the real bot, so the running daemon got 409 Conflict."""
     target = (data_dir or DATA_DIR) / "config.json"
-    if target.exists():
+    if target.exists() or env.get("CCMONITOR_HOME"):
         return target
     for d in _legacy_dirs("Roaming", env):
         if (d / "config.json").is_file():

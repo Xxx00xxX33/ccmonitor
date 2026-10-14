@@ -217,6 +217,7 @@ class TelegramBridge:
         self._lock = threading.Lock()
         self._down_since: float | None = None
         self._down_count = 0
+        self._conflict = False  # a 409 meanwhile: another process polls this bot
         self._closed = False
 
     def attach(self, side: SideChannel) -> None:
@@ -276,14 +277,21 @@ class TelegramBridge:
             if self._down_since is None:
                 self._down_since = time.monotonic()
             self._down_count += 1
+            self._conflict |= " 409 " in str(error)
 
     def _telegram_ok(self) -> None:
         with self._lock:
             if self._down_since is None:
                 return
             minutes = max(1, round((time.monotonic() - self._down_since) / 60))
-            count, self._down_since, self._down_count = self._down_count, None, 0
-        if self.health:
+            count, conflict = self._down_count, self._conflict
+            self._down_since, self._down_count, self._conflict = None, 0, False
+        if not self.health:
+            return
+        if conflict:
+            self.health.report("telegram", f"另一个程序在用同一个 bot 接收消息（409 冲突，约 {minutes} 分钟、{count} 次），"
+                                           "期间手机发来的消息可能被它收走")
+        else:
             self.health.report("telegram", f"Telegram 曾不可用约 {minutes} 分钟（{count} 次请求失败），期间的通知可能丢失")
 
     async def poll_forever(self) -> None:

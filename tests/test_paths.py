@@ -75,12 +75,21 @@ class PathsTest(unittest.TestCase):
         self.assertFalse(self.data.exists())
 
     def test_config_is_read_where_an_older_version_kept_it(self):
+        env = {k: v for k, v in os.environ.items() if k != "CCMONITOR_HOME"}
         with mock.patch.object(paths, "DATA_DIR", self.data):
-            self.assertEqual(paths.config_file(), self.data / "config.json")
+            self.assertEqual(paths.config_file(env=env), self.data / "config.json")
             old = self.put(self.package / "Roaming" / "ccmonitor" / "config.json", {})
-            self.assertEqual(paths.config_file(), old)
+            self.assertEqual(paths.config_file(env=env), old)
             new = self.put(self.data / "config.json", {})
-            self.assertEqual(paths.config_file(), new)
+            self.assertEqual(paths.config_file(env=env), new)
+
+    def test_a_ccmonitor_home_never_borrows_an_older_versions_config(self):
+        # 2026-10-14: a throwaway window on a temp CCMONITOR_HOME read the real token from
+        # %APPDATA% and polled the real bot, so the running daemon got 409 Conflict.
+        self.put(self.roaming / "ccmonitor" / "config.json", {})
+        self.put(self.package / "Roaming" / "ccmonitor" / "config.json", {})
+        env = dict(os.environ, CCMONITOR_HOME=str(self.data))
+        self.assertEqual(paths.config_file(self.data, env), self.data / "config.json")
 
 
 if __name__ == "__main__":

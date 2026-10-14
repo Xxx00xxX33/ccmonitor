@@ -21,11 +21,12 @@ import time
 from typing import Callable
 
 from .relaymode import HELPER_TITLE
-from .sessions import find_local_id, find_title
+from .sessions import find_local_id, find_title, is_archived
 
 log = logging.getLogger("ccmonitor")
 
 ACK_SECONDS = 90
+ARCHIVE_CHECK_SECONDS = 60
 RESULTS = {
     "delivered": "已经辅助会话送达",
     "queued": "已经辅助会话排队：该会话正忙，这一轮结束后执行",
@@ -35,12 +36,16 @@ RESULTS = {
 class HelperRelay:
     def __init__(self, loop: asyncio.AbstractEventLoop,
                  find_local_id: Callable[[str], str | None] = find_local_id, ack_seconds: float = ACK_SECONDS,
-                 title_of: Callable[[str], str | None] = find_title, now: Callable[[], float] = time.monotonic):
+                 title_of: Callable[[str], str | None] = find_title, now: Callable[[], float] = time.monotonic,
+                 archived: Callable[[str], bool] = is_archived, archive_check_seconds: float = ARCHIVE_CHECK_SECONDS):
         self._loop = loop
         self._find_local_id = find_local_id
         self._ack_seconds = ack_seconds
         self._title_of = title_of
         self._now = now
+        self._archived = archived
+        self._archive_check_seconds = archive_check_seconds
+        self._watch: asyncio.Task | None = None
         self.since: float | None = None      # when the current helper context started serving
         self.paused_title: str | None = None  # set while rotating: the helper's Desktop title
         self._ids = itertools.count(1)
@@ -80,8 +85,11 @@ class HelperRelay:
     async def start(self, port: int) -> None:
         self._server = await asyncio.start_server(self._on_feed, "127.0.0.1", port)
         self.port = self._server.sockets[0].getsockname()[1]
+        self._watch = asyncio.create_task(self._watch_archive())
 
     async def stop(self) -> None:
+        if self._watch:
+            self._watch.cancel()
         if self._writer:
             self._writer.close()
         if self._server:
@@ -114,6 +122,29 @@ class HelperRelay:
                 self._writer = None
                 log.info("helper session disconnected")
             writer.close()
+
+    async def _watch_archive(self) -> None:
+        while True:
+            await asyncio.sleep(self._archive_check_seconds)
+            try:
+                await asyncio.to_thread(self.drop_if_archived)
+            except Exception as e:
+                log.warning("helper archive check failed: %s", type(e).__name__)
+
+    def drop_if_archived(self) -> bool:
+        """Archiving the helper in Desktop doesn't end its feed process (seen 2026-10-14:
+        the feed stayed connected, so ccmonitor kept counting a session nobody runs as its
+        helper). Once Desktop marks the helper archived, close the feed: forwards fall back
+        to mode A, the window offers 「新建转发会话」 again, and the orphaned feed process
+        sees the connection end and exits. Not while rotating, when the id is changing."""
+        writer, sid = self._writer, self.session_id
+        if writer is None or self.paused_title or not sid or not self._archived(sid):
+            return False
+        log.info("helper session archived; dropping its feed")
+        if self._writer is writer:
+            self._writer = None
+        self._loop.call_soon_threadsafe(writer.close)
+        return True
 
     def ack(self, request_id, result: str) -> None:
         entry = self._pending.get(request_id)

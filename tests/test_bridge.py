@@ -85,6 +85,21 @@ class OutageTest(unittest.TestCase):
         self.assertEqual(len(reports), 1)
         self.assertIn("2 次请求失败", reports[0])
 
+    def test_a_conflict_names_the_other_poller_not_an_outage(self):
+        # 409: another process polls the same bot (2026-10-14: a throwaway test window).
+        # Telegram was up and sends went through; only incoming messages were at risk.
+        api = RecordingApi()
+        bridge = TelegramBridge(SideChannel(api, 1, NotImplementedWriteBack(), Away()), api)
+        reports = []
+        bridge.health = Health(lambda text: reports.append(text))
+        bridge._telegram_failed("polling", TelegramError(
+            "getUpdates: 409 Conflict: terminated by other getUpdates request; "
+            "make sure that only one bot instance is running"))
+        bridge._telegram_ok()
+        self.assertEqual(len(reports), 1)
+        self.assertNotIn("不可用", reports[0])
+        self.assertIn("同一个 bot", reports[0])
+
 
 class NoGetMe(RecordingApi):
     """getMe fails (Telegram unreachable at start); everything else works."""

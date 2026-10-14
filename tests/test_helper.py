@@ -101,6 +101,25 @@ class HelperRelayTest(unittest.TestCase):
             threading.Event().wait(0.1)
         self.assertFalse(self.helper.connected)
 
+    def test_archived_helper_loses_its_feed_and_the_feed_process_exits(self):
+        archived = set()
+        self.helper._archived = archived.__contains__
+        self.start_feed()
+        self.assertFalse(self.helper.drop_if_archived())  # still live in Desktop
+        self.assertTrue(self.helper.connected)
+        archived.add(HELPER_SID)
+        self.assertTrue(self.helper.drop_if_archived())
+        self.assertFalse(self.helper.connected)
+        self.assertIn("未连接", self.helper.send_prompt("cli-1", "x"))  # falls back to mode A
+        self.assertEqual(self.feed.wait(5), 0)  # the orphaned feed ends by itself
+
+    def test_rotation_is_not_mistaken_for_archiving(self):
+        self.helper._archived = lambda sid: True
+        self.start_feed()
+        self.helper.pause("ccmonitor 转发")
+        self.assertFalse(self.helper.drop_if_archived())
+        self.assertTrue(self.helper.attached)
+
     def test_helper_sessions_own_events_are_ignored(self):
         self.start_feed()
         run_hook("relay.py", self.daemon.port, {"hook_event_name": "Stop", "session_id": HELPER_SID,
@@ -121,6 +140,31 @@ class HelperRelayTest(unittest.TestCase):
 
     def test_cannot_approve(self):
         self.assertIn("不能审批", self.helper.approve("cli-1", True, "x"))
+
+
+class IsArchivedTest(unittest.TestCase):
+    """sessions.is_archived reads Desktop's session records (local_*.json)."""
+
+    def setUp(self):
+        import tempfile
+        d = tempfile.TemporaryDirectory()
+        self.addCleanup(d.cleanup)
+        self.root = Path(d.name)
+
+    def record(self, name, **fields):
+        path = self.root / "acct" / "org" / f"local_{name}.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(fields), encoding="utf-8")
+
+    def test_archived_only_when_every_record_says_so(self):
+        from ccmonitor.sessions import is_archived
+        self.assertFalse(is_archived("h1", self.root))  # no record: unknown, not archived
+        self.record("a", cliSessionId="h1", isArchived=False)
+        self.assertFalse(is_archived("h1", self.root))
+        self.record("a", cliSessionId="h1", isArchived=True)
+        self.assertTrue(is_archived("h1", self.root))
+        self.record("b", cliSessionId="h1")  # another live record of the same CLI session
+        self.assertFalse(is_archived("h1", self.root))
 
 
 class FallbackTest(unittest.TestCase):
