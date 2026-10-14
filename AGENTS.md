@@ -2,7 +2,7 @@
 
 ### Issue tracker
 
-Issues and specs live in GitHub Issues of Xxx00xxX33/ccmonitor (`gh` CLI). See `docs/agents/issue-tracker.md`.
+Issues and specs live in GitHub Issues of the repository this clone came from (`gh` CLI, which takes it from `git remote -v`). See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
