@@ -9,7 +9,7 @@ ccmonitor 有两种转发模式（DESIGN.md 第 5 节），用来处理界面写
 
 几个入口，切的是同一份转发模式，选择会写进 `%USERPROFILE%\.ccmonitor\relay-mode.json`，重启后保持：
 
-- ccmonitor 窗口的状态页：转发模式选 A 或 B。选 B 而还没有转发会话时，会显示新建步骤和「复制启动指令」按钮（见下面「怎么建」）。
+- ccmonitor 窗口的状态页：转发模式选 A 或 B。选 B 而还没有转发会话时，会出现「新建转发会话」和「复制启动指令」两个按钮（见下面「怎么建」）。
 - Telegram：`/mode` 查看，`/mode a`、`/mode b` 切换。从 Telegram 切到 B 时没法新建转发会话，ccmonitor 会提示你到电脑上按窗口里的说明建。
 - 运行 `python -m ccmonitor.relaymode a`、`b` 或 `status`（自己运行或让任一 Claude 会话运行都行）。切到 B 而还没有转发会话时，这条命令打印新建步骤和启动指令。
 
@@ -52,12 +52,20 @@ ccmonitor 有两种转发模式（DESIGN.md 第 5 节），用来处理界面写
 
 ## 怎么建
 
-转发会话由你手动新建，不让别的会话代建：会话新建会话要用的工具不是每个 Claude Desktop 版本都有（2026-10-14 实测缺 `start_session`），ccmonitor 要在任何人的电脑上都能用。
-
 1. 确认 ccmonitor 在运行（它在 47822 端口等转发会话连上来），并已切到模式 B。
-2. 在 Claude Desktop 里新建一个会话：文件夹选 ccmonitor 的仓库目录（不用 worktree），模型选最便宜的（如 Haiku），effort 选 low，权限模式选 **Bypass permissions**。权限不是 Bypass 的话，每次转发都要你在电脑上确认。
-3. 在 ccmonitor 窗口的状态页点「复制启动指令」，作为这个会话的第一条消息发出去。也可以运行 `python -m ccmonitor.relaymode b`，从打印的内容里复制。
-4. 在 Telegram 发 `/status`，看到「转发会话：已连接」就好了。
+2. 在 ccmonitor 窗口的状态页点「新建转发会话」。Claude Desktop 会打开一个新会话：文件夹是存储目录里的 `helper`，模型和 effort 已经是 Haiku、Low，输入框里已经填好启动指令。
+3. 第一次使用时：Desktop 问是否信任这个文件夹，选信任；权限模式选 **Bypass permissions**（不是 Bypass 的话，每次转发都要你在电脑上确认）。这两项 Desktop 都按文件夹记住，以后不用再选。
+4. 按发送。
+5. 在 Telegram 发 `/status`，看到「转发会话：已连接」就好了。
+
+为什么是这样（2026-10-14）：
+
+- 不让别的会话代建：会话新建会话要用的工具（`start_session`）不是每个 Claude Desktop 版本都有，ccmonitor 要在任何人的电脑上都能用。
+- 不用订阅跑无头的 `claude -p` 来转发：官方要求做成产品给别人用时走 API key，消费者条款也限制用脚本自动访问。
+- 「新建转发会话」用的是 Desktop 官方的深链接 `claude://code/new?q=…&folder=…`，完整的启动指令（编码后约 4 KB）能整段填进去。Desktop 有意只填不发，所以最后的发送由你来按，ccmonitor 不替你按。
+- 模型和 effort 来自 `helper` 文件夹里的 `.claude/settings.json`（`model: haiku`、`effortLevel: low`），只影响这个文件夹里的会话；里面的其他设置会保留。Bypass 不能这样设：Claude Code 不认项目设置里的 Bypass，写进全局设置又会改变你所有会话，所以留给你在这个文件夹里选一次。
+
+打不开链接时（比如没装 Claude Desktop 的协议处理），自己在 Desktop 里于 `helper` 文件夹新建会话，按上面的设置选好，把「复制启动指令」的内容作为第一条消息发出。`python -m ccmonitor.relaymode b` 也会打印同样的步骤和启动指令。
 
 启动指令以 `ccmonitor/relaymode.py` 里的 `SETUP_PROMPT` 为准，换班时也发这一段。它不是固定文本：里面的 Python 和脚本路径是按这台电脑上运行 ccmonitor 的那个 Python 和仓库位置生成的，所以要从窗口或命令复制，不要从别处抄。它要求转发会话先确认自己有 `Monitor` 和 `mcp__ccd_session_mgmt__send_message` 两个工具，缺一个就回一句「本环境缺少……请切回转发模式 A」并停下；改标题用的 `set_session_title` 没有也不要紧，换班按转发会话当时的标题找它。
 

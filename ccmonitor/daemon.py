@@ -376,8 +376,8 @@ async def _serve(port: int, stop: asyncio.Event | None = None,
             state = helper_state(helper)
             text = f"转发模式：{DESCRIBE[relay_mode.mode]}；转发会话：{state}"
             if relay_mode.mode == "b" and state == "未连接":
-                text += ("\n还没有转发会话，消息先按转发模式 A 排队。到电脑上打开 ccmonitor 窗口，按状态页的说明"
-                         "新建一个会话，把「复制启动指令」复制的内容作为第一条消息发进去")
+                text += ("\n还没有转发会话，消息先按转发模式 A 排队。到电脑上打开 ccmonitor 窗口，在状态页点"
+                         "「新建转发会话」，再在 Claude Desktop 里按发送")
             elif relay_mode.mode == "a" and state != "未连接":
                 text += "\n转发模式 A 不用转发会话，可以到电脑上归档「ccmonitor 转发」"
 

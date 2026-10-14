@@ -18,6 +18,7 @@ import os
 import socket
 import sys
 from pathlib import Path
+from urllib.parse import quote
 
 from . import paths
 
@@ -91,17 +92,52 @@ class RelayMode:
         self.mode = mode
 
 
-# How the user creates the helper: by hand, on purpose. A session can only create another
-# with a tool some Claude Desktop builds don't offer (start_session was missing on
-# 2026-10-14), and ccmonitor is meant to work on anyone's computer.
-HELPER_STEPS = (f"在 Claude Desktop 里新建一个会话：文件夹选 {ROOT}（不用 worktree），模型选最便宜的"
-                "（如 Haiku），effort 选 low，权限模式选 Bypass permissions（否则每次转发都要你确认），"
-                "再把启动指令作为第一条消息发进去。")
+# The helper's own folder, in the storage directory. Its project settings start a new
+# session there on the cheapest model at effort low (the documented `model` and
+# `effortLevel` keys; Desktop honours them, seen 2026-10-14). Bypass permissions can't be
+# set this way (Claude Code ignores it in project settings), so the user picks it once and
+# Desktop remembers it for the folder. The setup prompt uses absolute paths, so the
+# helper doesn't care where it runs.
+HELPER_DIR = "helper"
+HELPER_SETTINGS = {"model": "haiku", "effortLevel": "low"}
 
 
-def helper_brief() -> str:
+def prepare_helper_dir(data_dir: Path | None = None) -> Path:
+    """Creates the helper's folder and sets HELPER_SETTINGS in its .claude/settings.json,
+    keeping any other keys there."""
+    folder = Path(data_dir or paths.DATA_DIR) / HELPER_DIR
+    settings = folder / ".claude" / "settings.json"
+    settings.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        current = json.loads(settings.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        current = {}
+    if not isinstance(current, dict):
+        current = {}
+    if any(current.get(k) != v for k, v in HELPER_SETTINGS.items()):
+        paths.write_text_atomic(settings, json.dumps({**current, **HELPER_SETTINGS}, ensure_ascii=False, indent=2))
+    return folder
+
+
+def new_session_link(folder: Path, prompt: str = SETUP_PROMPT) -> str:
+    """claude://code/new opens a new Desktop session in `folder` with `prompt` in its box.
+    Desktop never sends it by itself (official docs); the user presses Send, and ccmonitor
+    doesn't press it for them. The full setup prompt (~4 KB encoded) arrives whole."""
+    return f"claude://code/new?q={quote(prompt, safe='')}&folder={quote(str(folder), safe='')}"
+
+
+# How the user creates the helper. A session can't do it for them: the tool for that
+# (start_session) is missing from some Claude Desktop builds (2026-10-14). The window's
+# 「新建转发会话」 opens new_session_link; these steps are the fallback without it.
+def helper_steps(folder: Path) -> str:
+    return (f"在 Claude Desktop 里新建一个会话：文件夹选 {folder}（不用 worktree），模型选最便宜的"
+            "（如 Haiku），effort 选 low，权限模式选 Bypass permissions（否则每次转发都要你确认），"
+            "再把启动指令作为第一条消息发进去。")
+
+
+def helper_brief(folder: Path) -> str:
     """The steps and the setup prompt together, for `relaymode b` to print."""
-    return f"{HELPER_STEPS}\n\n启动指令：\n\n{SETUP_PROMPT}"
+    return f"{helper_steps(folder)}\n\n启动指令：\n\n{SETUP_PROMPT}"
 
 
 def ask_daemon(request: dict, port: int) -> dict | None:
@@ -134,7 +170,7 @@ def main(argv: list[str] | None = None) -> int:
     mode, helper = reply.get("mode", DEFAULT), reply.get("helper", "未连接")
     print(f"转发模式：{DESCRIBE.get(mode, mode)}；转发会话：{helper}")
     if mode == "b" and helper == "未连接":
-        print("\n还没有转发会话。" + helper_brief())
+        print("\n还没有转发会话。" + helper_brief(prepare_helper_dir()))
     elif mode == "a" and helper != "未连接":
         print("\n模式 A 不用转发会话：可以归档标题为「%s」的会话。" % HELPER_TITLE)
     return 0

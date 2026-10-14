@@ -842,10 +842,23 @@ class StatusTest(unittest.TestCase):
         snap = self.c.snapshot()
         self.assertEqual((snap.helper, snap.needs_helper), ("已连接", False))
 
-    def test_the_hint_is_manual_steps_and_the_button_copies_the_setup_prompt(self):
-        self.assertIn("Bypass permissions", self.c.helper_steps)
-        self.assertNotIn("start_session", self.c.helper_steps)
+    def test_copy_button_copies_the_setup_prompt(self):
         self.assertEqual(self.c.setup_prompt(), SETUP_PROMPT)
+
+    def test_new_helper_session_opens_a_prefilled_desktop_session_in_the_helper_folder(self):
+        opened = []
+        c = Controller(registry=FakeRegistry(), port=12345, data_dir=self.dir, env={}, open_url=opened.append)
+        line = c.new_helper_session()
+        self.assertEqual(len(opened), 1)
+        self.assertTrue(opened[0].startswith("claude://code/new?q="))
+        self.assertTrue((self.dir / "helper" / ".claude" / "settings.json").exists())
+        self.assertIn("Bypass permissions", line)
+
+    def test_new_helper_session_falls_back_to_the_copy_button_when_the_link_fails(self):
+        def fail(url):
+            raise OSError("no handler")
+        c = Controller(registry=FakeRegistry(), port=12345, data_dir=self.dir, env={}, open_url=fail)
+        self.assertIn("「复制启动指令」", c.new_helper_session())
 
     def test_open_log_opens_the_storage_directorys_log_in_notepad(self):
         opened = []

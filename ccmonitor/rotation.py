@@ -93,6 +93,6 @@ class HelperRotation:
         self._reported = code not in ("sent", "sent_draft_lost")
         if self._reported:
             self._report(f"转发会话已清空，但启动指令没发进去（{status}）；消息先按转发模式 A 排队。"
-                         f"请到电脑上归档「{title}」，再按 ccmonitor 窗口状态页的说明新建一个会话，"
-                         "把「复制启动指令」复制的内容作为第一条消息发进去")
+                         f"请到电脑上归档「{title}」，再在 ccmonitor 窗口状态页点「新建转发会话」，"
+                         "在 Claude Desktop 里按发送")
         self._primed_at = self._now()

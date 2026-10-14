@@ -21,7 +21,7 @@ from typing import Callable, Mapping
 
 from .away import Presence
 from . import autostart, legacy, paths, settings
-from .relaymode import HELPER_STEPS, MODE_FILE, SETUP_PROMPT, load_mode, save_mode
+from .relaymode import MODE_FILE, SETUP_PROMPT, load_mode, new_session_link, prepare_helper_dir, save_mode
 
 log = logging.getLogger("ccmonitor")
 
@@ -51,7 +51,7 @@ class Snapshot:
 
     @property
     def needs_helper(self) -> bool:
-        """Mode B with no helper session: show the steps and 「复制启动指令」."""
+        """Mode B with no helper session: show 「新建转发会话」 and 「复制启动指令」."""
         return self.relay_mode == "b" and self.helper == "未连接"
 
     @property
@@ -173,6 +173,7 @@ class Controller:
                  last_input: Callable[[], int] | None = None,
                  env: Mapping[str, str] = os.environ,
                  open_file: Callable[[list[str]], object] = subprocess.Popen,
+                 open_url: Callable[[str], object] | None = None,
                  ini_path: Path | None = None,
                  files=None,
                  autostart_command: str | None = None,
@@ -186,7 +187,8 @@ class Controller:
         clock: seconds; last_input: the input source for the away state (away._last_input
         when None); env: where CCMONITOR_HOME and the CCMONITOR_TELEGRAM_TOKEN /
         CCMONITOR_CHAT_ID overrides are read; open_file: runs a command line without
-        waiting, for 「打开日志」; files: what holds the storage directory open in this
+        waiting, for 「打开日志」; open_url: hands a URL to its registered app
+        (os.startfile when None), for 「新建转发会话」; files: what holds the storage directory open in this
         process, release()/attach(dir) around a move (ProcessFiles when None);
         autostart_command: the Run value 开机自启 writes (autostart.default_command() when
         None); processes, kill: list running processes as legacy.Proc and end one by pid
@@ -206,6 +208,7 @@ class Controller:
         self.last_input = last_input
         self._make_service = service_factory
         self._open_file = open_file
+        self._open_url = open_url or getattr(os, "startfile", None)
         self._alerted = False  # the current 出错 state has had its balloon
         self._service = None
         self._error = ""  # why the last enable failed
@@ -518,12 +521,29 @@ class Controller:
         except OSError as e:
             log.warning("could not open the log: %s", type(e).__name__)
 
-    helper_steps = HELPER_STEPS  # how to create the helper, on the 状态 page
-
     @staticmethod
     def setup_prompt() -> str:
-        """「复制启动指令」: the first message of the helper session the user creates."""
+        """「复制启动指令」: the first message of a helper session made by hand."""
         return SETUP_PROMPT
+
+    def helper_folder(self) -> Path:
+        """Where the helper session runs: prepared, so a new session there starts on the
+        cheapest model at effort low."""
+        return prepare_helper_dir(self.data_dir)
+
+    def new_helper_session(self) -> str:
+        """「新建转发会话」: opens a new Claude Desktop session in the helper folder with the
+        setup prompt filled in. The user presses Send (and, the first time, trusts the
+        folder and picks Bypass permissions). Returns the line the window shows."""
+        try:
+            folder = self.helper_folder()
+            if self._open_url is None:
+                raise OSError("no URL handler")
+            self._open_url(new_session_link(folder))
+        except OSError as e:
+            log.warning("could not open a new helper session: %s", type(e).__name__)
+            return f"打不开 Claude Desktop：请在 {self.data_dir / 'helper'} 手动新建会话，发出「复制启动指令」的内容"
+        return "已在 Claude Desktop 打开新会话：第一次请信任这个文件夹、把权限选成 Bypass permissions，再按发送"
 
     def set_relay_mode(self, mode: str) -> Snapshot:
         """The A/B choice. Running, it switches the daemon's own RelayMode, the one

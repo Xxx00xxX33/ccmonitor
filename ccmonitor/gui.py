@@ -132,10 +132,13 @@ class Window:
 
         self.helper_hint = ttk.Frame(page)  # shown only in mode B without a helper session
         ttk.Label(self.helper_hint, wraplength=WIDTH - 48, foreground=AMBER,
-                  text="转发模式 B 还没有转发会话，消息先按转发模式 A 排队。" + self.c.helper_steps).pack(fill="x")
+                  text="转发模式 B 还没有转发会话，消息先按转发模式 A 排队。点「新建转发会话」，Claude Desktop "
+                       "会打开一个填好启动指令的新会话（文件夹、模型、effort 都已设好）；第一次请信任这个文件夹、"
+                       "把权限选成 Bypass permissions，再按发送。").pack(fill="x")
         hint_row = ttk.Frame(self.helper_hint)
         hint_row.pack(fill="x", pady=(4, 0))
-        ttk.Button(hint_row, text="复制启动指令", command=self.on_copy_prompt).pack(side="left")
+        ttk.Button(hint_row, text="新建转发会话", command=self.on_new_helper).pack(side="left")
+        ttk.Button(hint_row, text="复制启动指令", command=self.on_copy_prompt).pack(side="left", padx=(8, 0))
         self.copied = ttk.Label(hint_row, foreground=MUTED)
         self.copied.pack(side="left", padx=(8, 0))
 
@@ -156,6 +159,9 @@ class Window:
 
     def on_mode(self) -> None:
         self.draw(self.c.set_relay_mode(self.mode.get()))
+
+    def on_new_helper(self) -> None:
+        self.copied.config(text=self.c.new_helper_session())
 
     def on_copy_prompt(self) -> None:
         self.root.clipboard_clear()

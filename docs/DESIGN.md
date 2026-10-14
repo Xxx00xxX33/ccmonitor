@@ -202,7 +202,7 @@
 - **转发模式 A / B**（2026-10-12，用户定）。
   - 模式 A（默认）：不借助 agent，即上面的守护进程内排队重发。
   - 模式 B：借助转发会话（最便宜的模型、effort low、Bypass permissions）；转发会话没连上或正在换班时按模式 A 排队。
-  - 转发会话由用户手动新建（2026-10-14 改，原来由任一会话用 `start_session` 代建）：那个工具不是每个 Claude Desktop 版本都有，ccmonitor 要能给别人用。窗口给出新建步骤和「复制启动指令」；启动指令里的 Python 用运行 ccmonitor 的那个（不靠 PATH 上的 `python`），缺必需工具时转发会话自己说明并停下。
+  - 转发会话由用户手动新建（2026-10-14 改，原来由任一会话用 `start_session` 代建）：那个工具不是每个 Claude Desktop 版本都有，ccmonitor 要能给别人用。窗口的「新建转发会话」用官方深链接 `claude://code/new` 在存储目录的 `helper` 文件夹里打开一个填好启动指令的新会话，模型和 effort 由该文件夹的项目设置定（Haiku、low）；用户第一次信任文件夹、选 Bypass，再按发送（深链接有意只填不发，ccmonitor 不代按）。「复制启动指令」留作打不开链接时的后备；启动指令里的 Python 用运行 ccmonitor 的那个（不靠 PATH 上的 `python`），缺必需工具时转发会话自己说明并停下。
   - 切换：守护进程启动参数 `--relay-mode a|b`、Telegram `/mode a|b`、或会话里运行 `python -m ccmonitor.relaymode a|b|status`；选择存进 `%USERPROFILE%\.ccmonitor\relay-mode.json`。切到 B 而没有转发会话时，命令打印新建参数，由运行它的会话新建。
   - 模式 B 每 6 小时换班：转发会话不能在自动触发的回合里新建会话；自己清空会停掉转发源且没人唤醒（2026-10-12 实测）；删除会话每次都要用户在电脑上确认。所以由守护进程在离开状态下用界面写入 `/clear` 再写入启动指令（实测 `/clear` 后模型、effort、权限模式保留）。换班和转发同一个工作线程排队，正在进行的转发先完成。细节见 [helper-session.md](helper-session.md)。
 

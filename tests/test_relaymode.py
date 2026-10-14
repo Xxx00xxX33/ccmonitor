@@ -10,7 +10,8 @@ from pathlib import Path
 from ccmonitor.daemon import Daemon
 from ccmonitor.desktop import DesktopWriteBack
 from ccmonitor.helper import HelperRelay
-from ccmonitor.relaymode import PYTHON, SETUP_PROMPT, RelayMode, helper_brief, load_mode, save_mode
+from ccmonitor.relaymode import (PYTHON, SETUP_PROMPT, RelayMode, helper_brief, load_mode, new_session_link,
+                                 prepare_helper_dir, save_mode)
 from ccmonitor.rotation import EVERY_SECONDS, RECONNECT_SECONDS, RETRY_SECONDS, HelperRotation
 
 
@@ -39,7 +40,7 @@ class ModeStoreTest(unittest.TestCase):
             save_mode("c", self.path)
 
     def test_helper_brief_is_steps_a_person_can_follow_anywhere(self):
-        brief = helper_brief()
+        brief = helper_brief(Path("C:/data/helper"))
         for part in ("新建一个会话", "low", "Bypass permissions", SETUP_PROMPT):
             self.assertIn(part, brief)
         self.assertNotIn("start_session", brief)  # not in every Claude Desktop build (2026-10-14)
@@ -53,6 +54,47 @@ class ModeStoreTest(unittest.TestCase):
         for tool in ("Monitor", "mcp__ccd_session_mgmt__send_message"):
             self.assertIn(tool, SETUP_PROMPT.split("\n1.")[0])  # checked before anything else
         self.assertIn("切回转发模式 A", SETUP_PROMPT)
+
+
+class HelperFolderTest(unittest.TestCase):
+    """「新建转发会话」 (2026-10-14): a folder whose project settings pick the model and
+    effort, and a claude://code/new link that opens a session there with the prompt."""
+
+    def setUp(self):
+        d = tempfile.TemporaryDirectory()
+        self.addCleanup(d.cleanup)
+        self.data = Path(d.name)
+
+    def settings(self) -> dict:
+        return json.loads((self.data / "helper" / ".claude" / "settings.json").read_text(encoding="utf-8"))
+
+    def test_folder_sets_the_cheapest_model_and_low_effort(self):
+        folder = prepare_helper_dir(self.data)
+        self.assertEqual(folder, self.data / "helper")
+        self.assertEqual(self.settings(), {"model": "haiku", "effortLevel": "low"})
+
+    def test_other_settings_in_the_folder_are_kept(self):
+        path = self.data / "helper" / ".claude" / "settings.json"
+        path.parent.mkdir(parents=True)
+        path.write_text('{"model": "opus", "env": {"A": "1"}}', encoding="utf-8")
+        prepare_helper_dir(self.data)
+        self.assertEqual(self.settings(), {"model": "haiku", "effortLevel": "low", "env": {"A": "1"}})
+
+    def test_a_broken_settings_file_is_replaced(self):
+        path = self.data / "helper" / ".claude" / "settings.json"
+        path.parent.mkdir(parents=True)
+        path.write_text("{oops", encoding="utf-8")
+        prepare_helper_dir(self.data)
+        self.assertEqual(self.settings(), {"model": "haiku", "effortLevel": "low"})
+
+    def test_link_carries_the_whole_prompt_and_the_folder(self):
+        from urllib.parse import parse_qs, urlsplit
+        link = new_session_link(Path("C:/Users/x y/.ccmonitor/helper"))
+        parts = urlsplit(link)
+        self.assertEqual((parts.scheme, parts.netloc, parts.path), ("claude", "code", "/new"))
+        query = parse_qs(parts.query)
+        self.assertEqual(query["q"], [SETUP_PROMPT])
+        self.assertEqual(query["folder"], [str(Path("C:/Users/x y/.ccmonitor/helper"))])
 
 
 class FakeHelper:
@@ -147,7 +189,7 @@ class RotationTest(unittest.TestCase):
         self.codes = ["sent", "fill_failed"]
         self.rot.check()
         self.assertEqual(len(self.reports), 1)
-        self.assertIn("「复制启动指令」", self.reports[0])  # the window's button, not a command
+        self.assertIn("「新建转发会话」", self.reports[0])  # the window's button, not a command
         self.assertNotIn("python -m", self.reports[0])
         self.helper._writer = None  # the feed died with /clear
         self.clock += RECONNECT_SECONDS
